@@ -1,0 +1,42 @@
+severity = stern
+
+[-ErrorHandling::RequireCheckingReturnValueOfEval]
+
+[-InputOutput::RequireBriefOpen]
+
+[-TestingAndDebugging::ProhibitNoWarnings]
+
+[-ValuesAndExpressions::ProhibitConstantPragma]
+[-Variables::ProhibitPackageVars]
+
+[InputOutput::RequireCheckedOpen]
+severity = stern
+
+[InputOutput::ProhibitBacktickOperators]
+only_in_void_context = 1
+
+[Miscellanea::ProhibitUselessNoCritic]
+severity = stern
+
+[NamingConventions::ProhibitAmbiguousNames]
+forbid = bases close contract left no right second set
+
+[Subroutines::ProhibitExcessComplexity]
+max_mccabe = 30
+
+[Subroutines::ProhibitManyArgs]
+severity = stern
+max_arguments = 6
+
+[Subroutines::ProtectPrivateSubs]
+severity = stern
+
+[ValuesAndExpressions::ProhibitInterpolationOfLiterals]
+severity = harsh
+
+[Variables::ProhibitUnusedVariables]
+severity = stern
+
+[Variables::ProhibitReusedNames]
+severity = stern
+

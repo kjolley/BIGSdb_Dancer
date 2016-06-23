@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>[% title %]</title>
+<meta name="viewport" content="width=device-width" />
+<link rel="stylesheet" type="text/css" href="[% uri_base %]/css/bigsdb.css" media="Screen" />
+<link rel="stylesheet" type="text/css" href="[% uri_base %]/css/font-awesome.css" media="Screen" />
+<link rel="stylesheet" type="text/css" href="[% uri_base %]/css/jquery-ui.css" media="Screen" />
+[% javascript %]
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+</head>
+<body>
+<div class="content" style="min-height:400px">
+[% IF session.user %]
+<div id="logindetails">
+<i>Logged in: <b>[% session.full_name %] ([% session.user %]).</b></i>
+ <a href="/[% session.db %]/logout">
+<span class="fa fa-sign-out"></span>Log out</a> | 
+<a href="/[% session.db %]/changePassword">
+Change password</a>
+</div>
+[% END %]
+
+
+[% content %]
+</div>
+</body>
+</html>

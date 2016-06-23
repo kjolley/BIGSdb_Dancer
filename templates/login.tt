@@ -1,0 +1,37 @@
+<h1>Please log in - [% desc %]</h1>
+[% IF banner %]
+<div class="box" id="banner">[% banner %]</div>
+[% END %]
+
+[% IF error %]
+<div class="box" id="statusbad"><p>[% error %]</p></div>
+[% END %]
+
+<div class="box" id="queryform"><div class="scrollable">
+[% registration %]
+<span class="main_icon fa fa-sign-in fa-3x pull-left"></span>
+<p>Please enter your log-in details.  Part of your IP address is used along with your
+username to set up your session. If you have a session opened on a different computer, 
+where the first three parts of the IP address vary, it will be closed when you log in here.</p>
+<noscript><p class="highlight">Please note that Javascript must be enabled in order to login.
+Passwords are hashed using Javascript prior to transmitting to the server.</p></noscript>
+<form action="[% form_action %]" method="post" enctype="multipart/form-data" 
+onsubmit="password.value=password_field.value; password_field.value=''; 
+password.value=CryptoJS.MD5(password.value+user.value); return true">
+<fieldset style="float:left"><legend>Log in details</legend>
+<ul><li><label for="user" class="display">Username: </label>
+<input type="text" name="user" id="user" size="20" maxlength="20" style="width:12em" value="[% params.user %]" />
+</li><li><label for="password_field" class="display">Password: </label>
+<input type="password" name="password_field" id="password_field" size="20" maxlength="20" style="width:12em" />
+</li></ul>
+</fieldset>
+
+[% submit %]
+<input type="hidden" name="session" value="[% session_id %]" />
+[% IF !password %]
+<input type="hidden" name="password" value="" />
+<input type="hidden" name="route" value="[% route %]" />
+[% END %]
+</form>
+</div></div>
+
