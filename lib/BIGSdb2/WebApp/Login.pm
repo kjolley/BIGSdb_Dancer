@@ -63,7 +63,7 @@ sub _login {
 	}
 	my $desc = $self->get_db_description() || 'BIGSdb';
 	if ( !params->{'session'} || !_login_session_exists( params->{'session'} ) ) {
-		$self->create_session( setting('session_id'), 'login', undef );
+		_create_session( setting('session_id'), 'login', undef );
 	}
 	my $params = {
 		title        => "Log in - $desc",
@@ -101,32 +101,27 @@ sub _secure_login {
 	# so store their current IP address in the database
 	######################################################
 	my $ip_addr = $self->get_ip_address;
-	$self->set_current_user_IP_address( $user, $ip_addr );
+	_set_current_user_IP_address( $user, $ip_addr );
 	######################################################
 	# Set Cookie information with a session timeout
 	######################################################
 	my $setCookieString = Digest::MD5::md5_hex( $ip_addr . $password_hash . UNIQUE_STRING );
-	my $session_cookie = "$self->{'system'}->{'db'}_session";
-	my $pass_cookie    = "$self->{'system'}->{'db'}_auth";
-	my $user_cookie    = "$self->{'system'}->{'db'}_user";
-	
-	my $cookies         = {
-		$session_cookie => params->{'session'},
-		$pass_cookie    => $setCookieString,
-		$user_cookie    => $user
-	};
-	$self->create_session( params->{'session'}, 'active', $user, $self->{'reset_password'} );
-	$self->set_cookies( $cookies, COOKIE_TIMEOUT );
+	my $session_cookie  = "$self->{'system'}->{'db'}_session";
+	my $pass_cookie     = "$self->{'system'}->{'db'}_auth";
+	my $user_cookie     = "$self->{'system'}->{'db'}_user";
+	my $cookies = { $session_cookie => params->{'session'}, $pass_cookie => $setCookieString, $user_cookie => $user };
+	_create_session( params->{'session'}, 'active', $user, $self->{'reset_password'} );
+	_set_cookies( $cookies, COOKIE_TIMEOUT );
 	return ( $user, $self->{'reset_password'} );    # SUCCESS, w/cookie header
 }
 
 sub _MD5_login {
 	my $self = setting('self');
-	$self->timeout_logins();                        # remove entries older than current_time + $timeout
+	_timeout_logins();                              # remove entries older than current_time + $timeout
 	if ( param('submit') ) {
 		if ( my $password = _check_password() ) {
 			$logger->info( 'User ' . param('user') . " logged in to $self->{'instance'}." );
-			$self->delete_session( params->{'session'} );
+			_delete_session( params->{'session'} );
 			return ( param('user'), $password );    # return user name and password hash
 		}
 	}
@@ -140,7 +135,7 @@ sub _check_password {
 	if ( !$login_session_exists ) { set error => 'The login window has expired - please resubmit credentials.' }
 	my $stored_hash = $self->get_password_hash( params->{'user'} ) // '';
 	if ( !$stored_hash ) {
-		$self->delete_session( params->{'session'} );
+		_delete_session( params->{'session'} );
 		set error => 'Invalid username or password entered.  Please try again.';
 		return;
 	}
@@ -169,7 +164,7 @@ sub _check_password {
 		$password_matches = 0;
 	}
 	if ( !$password_matches ) {
-		$self->delete_session( params->{'session'} );
+		_delete_session( params->{'session'} );
 		set error => 'Invalid username or password entered.  Please try again.';
 	} else {
 		if ( $stored_hash->{'reset_password'} ) {
@@ -185,8 +180,93 @@ sub _logout {
 	my $self           = setting('self');
 	my $session_cookie = "$self->{'system'}->{'db'}_session";
 	my $session_id     = $self->get_cookie($session_cookie);
-	$self->delete_session($session_id);
+	_delete_session($session_id);
 	redirect uri_for("/$self->{'instance'}");
+	return;
+}
+
+sub _set_current_user_IP_address {
+	my ( $user_name, $ip_address ) = @_;
+	my $self = setting('self');
+	eval {
+		$self->{'auth_db'}->do( 'UPDATE users SET ip_address=? WHERE (dbase,name)=(?,?)',
+			undef, $ip_address, $self->{'system'}->{'db'}, $user_name );
+	};
+	if ($@) {
+		$logger->error($@);
+		$self->{'auth_db'}->rollback;
+	} else {
+		$self->{'auth_db'}->commit;
+	}
+	return;
+}
+
+sub _create_session {
+
+	#Store session as a MD5 hash of passed session.  This should prevent someone with access to the auth database
+	#from easily using active session tokens.
+	my ( $session, $state, $username, $reset_password ) = @_;
+	my $self   = setting('self');
+	my $exists = $self->{'datastore'}->run_query(
+		'SELECT EXISTS(SELECT * FROM sessions WHERE dbase=? AND session=md5(?))',
+		[ $self->{'system'}->{'db'}, $session ],
+		{ db => $self->{'auth_db'} }
+	);
+	return if $exists;
+	eval {
+		$self->{'auth_db'}->do(
+			'INSERT INTO sessions (dbase,session,start_time,state,username,reset_password) VALUES (?,md5(?),?,?,?,?)',
+			undef, $self->{'system'}->{'db'},
+			$session, time, $state, $username, $reset_password
+		);
+	};
+	if ($@) {
+		$logger->error($@);
+		$self->{'auth_db'}->rollback;
+	} else {
+		$logger->debug("$state session created: $session");
+		$self->{'auth_db'}->commit;
+	}
+	foreach my $param (qw(password_field password session user submit)) {
+		undef params->{$_};
+	}
+	return;
+}
+
+sub _delete_session {
+	my ($session_id) = @_;
+	my $self = setting('self');
+	eval { $self->{'auth_db'}->do( 'DELETE FROM sessions WHERE session=md5(?)', undef, $session_id ); };
+	if ($@) {
+		$logger->error($@);
+		$self->{'auth_db'}->rollback;
+	} else {
+		$self->{'auth_db'}->commit;
+	}
+	return;
+}
+
+sub _set_cookies {
+	my ( $cookie_values, $expires ) = @_;
+	foreach my $cookie ( keys %$cookie_values ) {
+		cookie( $cookie => $cookie_values->{$cookie}, expires => $expires );
+	}
+	return;
+}
+
+#Do this for all databases
+sub _timeout_logins {
+	my $self = setting('self');
+	eval {
+		$self->{'auth_db'}
+		  ->do( 'DELETE FROM sessions WHERE start_time<? AND state=?', undef, ( time - LOGIN_TIMEOUT ), 'login' );
+	};
+	if ($@) {
+		$logger->error($@);
+		$self->{'auth_db'}->rollback;
+	} else {
+		$self->{'auth_db'}->commit;
+	}
 	return;
 }
 1;

@@ -283,22 +283,6 @@ sub _timout_sessions {
 	return;
 }
 
-#Do this for all databases
-sub timeout_logins {
-	my ($self) = @_;
-	eval {
-		$self->{'auth_db'}
-		  ->do( 'DELETE FROM sessions WHERE start_time<? AND state=?', undef, ( time - LOGIN_TIMEOUT ), 'login' );
-	};
-	if ($@) {
-		$logger->error($@);
-		$self->{'auth_db'}->rollback;
-	} else {
-		$self->{'auth_db'}->commit;
-	}
-	return;
-}
-
 sub get_password_hash {
 	my ( $self, $name ) = @_;
 	return if !$name;
@@ -331,14 +315,6 @@ sub _active_session_exists {
 	);
 }
 
-sub set_cookies {
-	my ( $self, $cookie_values, $expires ) = @_;
-	foreach my $cookie ( keys %$cookie_values ) {
-		cookie( $cookie => $cookie_values->{$cookie}, expires => $expires );
-	}
-	return;
-}
-
 sub _password_reset_required {
 	my ( $self, $session, $username ) = @_;
 	return $self->{'datastore'}->run_query(
@@ -346,63 +322,5 @@ sub _password_reset_required {
 		[ $self->{'system'}->{'db'}, $session, 'active', $username ],
 		{ db => $self->{'auth_db'}, cache => 'Login::password_reset_required' }
 	);
-}
-
-sub create_session {
-
-	#Store session as a MD5 hash of passed session.  This should prevent someone with access to the auth database
-	#from easily using active session tokens.
-	my ( $self, $session, $state, $username, $reset_password ) = @_;
-	my $exists = $self->{'datastore'}->run_query(
-		'SELECT EXISTS(SELECT * FROM sessions WHERE dbase=? AND session=md5(?))',
-		[ $self->{'system'}->{'db'}, $session ],
-		{ db => $self->{'auth_db'} }
-	);
-	return if $exists;
-	eval {
-		$self->{'auth_db'}->do(
-			'INSERT INTO sessions (dbase,session,start_time,state,username,reset_password) VALUES (?,md5(?),?,?,?,?)',
-			undef, $self->{'system'}->{'db'},
-			$session, time, $state, $username, $reset_password
-		);
-	};
-	if ($@) {
-		$logger->error($@);
-		$self->{'auth_db'}->rollback;
-	} else {
-		$logger->debug("$state session created: $session");
-		$self->{'auth_db'}->commit;
-	}
-	foreach my $param (qw(password_field password session user submit)) {
-		undef params->{$_};
-	}
-	return;
-}
-
-sub delete_session {
-	my ( $self, $session_id ) = @_;
-	eval { $self->{'auth_db'}->do( 'DELETE FROM sessions WHERE session=md5(?)', undef, $session_id ); };
-	if ($@) {
-		$logger->error($@);
-		$self->{'auth_db'}->rollback;
-	} else {
-		$self->{'auth_db'}->commit;
-	}
-	return;
-}
-
-sub set_current_user_IP_address {
-	my ( $self, $user_name, $ip_address ) = @_;
-	eval {
-		$self->{'auth_db'}->do( 'UPDATE users SET ip_address=? WHERE (dbase,name)=(?,?)',
-			undef, $ip_address, $self->{'system'}->{'db'}, $user_name );
-	};
-	if ($@) {
-		$logger->error($@);
-		$self->{'auth_db'}->rollback;
-	} else {
-		$self->{'auth_db'}->commit;
-	}
-	return;
 }
 1;
