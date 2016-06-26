@@ -27,9 +27,9 @@ use constant { CONFIG_DIR => '/etc/bigsdb' };
 use Log::Log4perl qw(get_logger);
 use FindBin;
 use lib "$FindBin::Bin/../lib";
-use BIGSdb2::Application;
+use BIGSdb2::WebApplication;
 Log::Log4perl->init_once( CONFIG_DIR . '/logging.conf' );
-my $app = BIGSdb2::Application->new(
+my $app = BIGSdb2::WebApplication->new(
 	{ config_dir => CONFIG_DIR }
 );
 $app->dance;

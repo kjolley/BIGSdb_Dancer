@@ -16,13 +16,13 @@
 #
 #You should have received a copy of the GNU General Public License
 #along with BIGSdb.  If not, see <http://www.gnu.org/licenses/>.
-package BIGSdb2::Routes::Query::Index;
+package BIGSdb2::WebApp::Query::Index;
 use strict;
 use warnings;
 use 5.010;
 use Log::Log4perl qw(get_logger);
 my $logger = get_logger('BIGSdb.Page');
-use Dancer2 appname => 'BIGSdb2::Application';
+use Dancer2 appname => 'BIGSdb2::WebApplication';
 get '/:db' => sub { _print_index() };
 
 sub _print_index {
