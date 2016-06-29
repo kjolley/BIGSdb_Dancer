@@ -1,0 +1,41 @@
+<h1>Bacterial Isolate Genome Sequence Database (BIGSdb)</h1>
+<div class="box" id="resultspanel">
+<h2>Version [% version %]</h2>
+<span class="main_icon fa fa-copyright fa-3x pull-left"></span>
+<ul style="margin-left:1em">
+<li>Written by Keith Jolley</li>
+<li>Copyright &copy; University of Oxford, 2010-2016.</li>
+<li><a href="http://www.biomedcentral.com/1471-2105/11/595">
+Jolley &amp; Maiden <i>BMC Bioinformatics</i> 2010, <b>11:</b>595</a></li></ul>
+<p>BIGSdb is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.</p>
+
+<p>BIGSdb is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.</p>
+
+<p>Full details of the GNU General Public License
+can be found at <a href="http://www.gnu.org/licenses/gpl.html">
+http://www.gnu.org/licenses/gpl.html</a>.</p>
+
+<h2>Documentation</h2>
+<span class="main_icon fa fa-book fa-3x pull-left"></span>
+<ul style="margin-left:1em">
+<li>Details of this software and the latest version can be downloaded from 
+<a href="http://pubmlst.org/software/database/bigsdb/">
+http://pubmlst.org/software/database/bigsdb/</a>.</li>
+<li>Full documentation can be found at <a href="http://bigsdb.readthedocs.io/">
+http://bigsdb.readthedocs.io/</a>.</li></ul>
+
+<h2>Software versions</h2>
+<ul>
+<li>Perl [% perl_version %]</li>
+<li>Dancer [% dancer_version %]</li>
+[% IF pg_version %]
+<li>[% pg_version %]</li>
+[% END %]
+</ul>
+</div>

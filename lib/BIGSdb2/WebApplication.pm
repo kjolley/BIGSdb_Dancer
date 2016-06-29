@@ -28,6 +28,7 @@ use List::MoreUtils qw(uniq);
 use Digest::MD5;
 use Log::Log4perl qw(get_logger);
 my $logger = get_logger('BIGSdb.Application_Initiate');
+use BIGSdb2::WebApp::About;
 use BIGSdb2::WebApp::ChangePassword;
 use BIGSdb2::WebApp::Login;
 use BIGSdb2::WebApp::Query::Index;
@@ -54,7 +55,7 @@ sub _before {
 	$self->{'instance'} = $request_uri =~ /^\/([\w\d\-_]+)/x ? $1 : '';
 	my $full_path = "$self->{'config_dir'}/dbases/$self->{'instance'}/config.xml";
 	if ( !$self->{'instance'} ) {
-		send_error( 'No database selected.', 404 );
+		return;    #No database - just return landing page.
 	} elsif ( !-e $full_path ) {
 		send_error( "Database $self->{'instance'} has not been defined", 404 );
 	} else {
@@ -206,11 +207,6 @@ sub _is_authorized {
 	if ( session('user') ) {
 		my $user_info = $self->{'datastore'}->get_user_info_from_username( session('user') );
 		session full_name => "$user_info->{'first_name'} $user_info->{'surname'}";
-
-		#TODO What is the point of the following?
-		if ( $route =~ /login$/x ) {
-			$route = "/$self->{'instance'}";
-		}
 		return 1;
 	}
 
