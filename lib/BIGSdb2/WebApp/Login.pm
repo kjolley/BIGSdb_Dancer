@@ -118,7 +118,7 @@ sub _secure_login {
 sub _MD5_login {
 	my $self = setting('self');
 	_timeout_logins();                              # remove entries older than current_time + $timeout
-	if ( param('submit') ) {
+	if ( params->{'submit'} ) {
 		if ( my $password = _check_password() ) {
 			$logger->info( 'User ' . param('user') . " logged in to $self->{'instance'}." );
 			_delete_session( params->{'session'} );

@@ -28,6 +28,7 @@ use List::MoreUtils qw(uniq);
 use Digest::MD5;
 use Log::Log4perl qw(get_logger);
 my $logger = get_logger('BIGSdb.Application_Initiate');
+use BIGSdb2::WebApp::ChangePassword;
 use BIGSdb2::WebApp::Login;
 use BIGSdb2::WebApp::Query::Index;
 use BIGSdb2::Constants qw(:interface :authentication);
@@ -87,7 +88,7 @@ sub _before {
 	$self->{'dataConnector'}->initiate( $self->{'system'}, $self->{'config'} );
 	$self->db_connect;
 	send_error( 'No access to databases - undergoing maintenance.', 503 ) if !$self->{'db'};
-	$self->initiate_authdb if ( $self->{'system'}->{'authentication'} // '' ) eq 'builtin';
+	$self->initiate_authdb;
 	$self->setup_datastore;
 
 	#	$self->_initiate_view;
@@ -99,9 +100,12 @@ sub _before {
 	#	if ( $request_uri =~ /$submission_route/x ) {
 	#		$self->setup_submission_handler;
 	#	}
+	
 	if ( ( $authenticated_db && $request_uri !~ /^$login_route/x && $request_uri !~ /^$logout_route/x ) ) {
 		send_error( 'Unauthorized', 401 ) if !$self->_is_authorized;
+		$self->{'permissions'} = $self->{'datastore'}->get_permissions( session('user') );
 	}
+	
 	return;
 }
 
@@ -180,9 +184,20 @@ sub get_action_fieldset {
 		  . qq(<span class="ui-button-text">$reset_label</span></a>\n);
 	}
 	my $class = BUTTON_CLASS;
-	$buffer .= qq(<input type="submit" name="submit" value="Log in" class="$class" />\n);
+	$buffer .= qq(<input type="submit" name="submit" value="$submit_label" class="$class" />\n);
 	$buffer .= q(</fieldset><div style="clear:both"></div>);
 	return $buffer;
+}
+
+sub is_admin {
+	my ($self) = @_;
+	if ( session('user') ) {
+		my $status = $self->{'datastore'}->run_query( 'SELECT status FROM users WHERE user_name=?',
+			session('user'), { cache => 'WebApplication::is_admin' } );
+		return if !$status;
+		return 1 if $status eq 'admin';
+	}
+	return;
 }
 ###############
 #Authentication
@@ -210,6 +225,7 @@ sub _is_authorized {
 	catch {
 		send_error( $self->{'authenticate_error'}, 401 );
 	};
+	
 	return;
 }
 

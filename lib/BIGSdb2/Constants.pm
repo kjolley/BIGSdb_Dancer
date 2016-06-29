@@ -132,13 +132,16 @@ $EXPORT_TAGS{'submissions'} = [
 ];
 
 #Authentication
-use constant UNIQUE_STRING   => 'bigsdbJolley';
-use constant BCRYPT_COST     => 12;
-use constant COOKIE_TIMEOUT  => '+12h';
-use constant SESSION_TIMEOUT => 12 * 60 * 60;     #Should be the same as cookie timeout (in seconds)
-use constant LOGIN_TIMEOUT   => 600;
-push @EXPORT_OK, qw(BCRYPT_COST UNIQUE_STRING COOKIE_TIMEOUT SESSION_TIMEOUT LOGIN_TIMEOUT);
+use constant UNIQUE_STRING       => 'bigsdbJolley';
+use constant BCRYPT_COST         => 12;
+use constant COOKIE_TIMEOUT      => '+12h';
+use constant SESSION_TIMEOUT     => 12 * 60 * 60;     #Should be the same as cookie timeout (in seconds)
+use constant LOGIN_TIMEOUT       => 600;
+use constant MIN_PASSWORD_LENGTH => 8;
+push @EXPORT_OK,
+  qw(BCRYPT_COST UNIQUE_STRING COOKIE_TIMEOUT SESSION_TIMEOUT LOGIN_TIMEOUT MIN_PASSWORD_LENGTH);
 $EXPORT_TAGS{'authentication'} = [
-	qw(BCRYPT_COST UNIQUE_STRING COOKIE_TIMEOUT SESSION_TIMEOUT LOGIN_TIMEOUT)
+	qw(BCRYPT_COST UNIQUE_STRING COOKIE_TIMEOUT SESSION_TIMEOUT
+	  LOGIN_TIMEOUT MIN_PASSWORD_LENGTH)
 ];
 1;

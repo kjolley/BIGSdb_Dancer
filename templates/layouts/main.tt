@@ -11,17 +11,18 @@
 </head>
 <body>
 <div class="content" style="min-height:400px">
-[% IF session.user %]
+
 <div id="logindetails">
+[% IF session.user %]
 <i>Logged in: <b>[% session.full_name %] ([% session.user %]).</b></i>
  <a href="/[% session.db %]/logout">
 <span class="fa fa-sign-out"></span>Log out</a> | 
 <a href="/[% session.db %]/changePassword">
 Change password</a>
-</div>
+[% ELSE %]
+<i>Not logged in.</i>
 [% END %]
-
-
+</div>
 [% content %]
 </div>
 </body>
