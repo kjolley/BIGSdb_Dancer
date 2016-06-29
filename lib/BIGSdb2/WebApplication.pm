@@ -95,17 +95,14 @@ sub _before {
 	my $authenticated_db = ( $self->{'system'}->{'read_access'} // '' ) ne 'public';
 	my $login_route      = "/$self->{'instance'}/login";
 	my $logout_route     = "/$self->{'instance'}/logout";
-
-	#	my $submission_route = "/db/$self->{'instance'}/submissions";
-	#	if ( $request_uri =~ /$submission_route/x ) {
-	#		$self->setup_submission_handler;
-	#	}
-	
 	if ( ( $authenticated_db && $request_uri !~ /^$login_route/x && $request_uri !~ /^$logout_route/x ) ) {
 		send_error( 'Unauthorized', 401 ) if !$self->_is_authorized;
 		$self->{'permissions'} = $self->{'datastore'}->get_permissions( session('user') );
+		my $change_password_route = "/$self->{'instance'}/changePassword";
+		if ( session('password_update_required') && $request_uri !~ /$change_password_route/x ) {
+			redirect( uri_for("/$self->{'instance'}/changePassword") );
+		}
 	}
-	
 	return;
 }
 
@@ -209,6 +206,8 @@ sub _is_authorized {
 	if ( session('user') ) {
 		my $user_info = $self->{'datastore'}->get_user_info_from_username( session('user') );
 		session full_name => "$user_info->{'first_name'} $user_info->{'surname'}";
+
+		#TODO What is the point of the following?
 		if ( $route =~ /login$/x ) {
 			$route = "/$self->{'instance'}";
 		}
@@ -225,7 +224,6 @@ sub _is_authorized {
 	catch {
 		send_error( $self->{'authenticate_error'}, 401 );
 	};
-	
 	return;
 }
 

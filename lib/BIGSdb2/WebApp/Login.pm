@@ -201,10 +201,9 @@ sub _set_current_user_IP_address {
 	return;
 }
 
+#Store session as a MD5 hash of passed session.  This should prevent someone
+#with access to the auth database from easily using active session tokens.
 sub _create_session {
-
-	#Store session as a MD5 hash of passed session.  This should prevent someone with access to the auth database
-	#from easily using active session tokens.
 	my ( $session, $state, $username, $reset_password ) = @_;
 	my $self   = setting('self');
 	my $exists = $self->{'datastore'}->run_query(

@@ -38,8 +38,13 @@ sub _change_password {
 	if ( params->{'submit'} && !$status->{'error'} ) {
 		my $user_name = $options->{'set'} ? params->{'user'} : session('user');
 		if ( _set_password_hash( $user_name, params->{'new_password1'} ) ) {
-			$status->{'success'} =
-			  $options->{'change'} ? q(Password updated ok.) : qq(Password set for user '$user_name'.);
+			if ($options->{'change'}){
+				$status->{'success'} = q(Password updated ok.);
+				session password_update_required => 0;
+			} else {
+				$status->{'success'} = qq(Password set for user '$user_name'.);
+			}
+			
 			undef params->{'submit'};
 		}
 	}
