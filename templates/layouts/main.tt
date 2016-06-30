@@ -10,6 +10,9 @@
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 </head>
 <body>
+[% IF settings.site_header -%]
+[% INCLUDE $settings.site_header %]
+[% END -%]
 <div class="content" style="min-height:400px">
 
 <div id="logindetails">
@@ -25,5 +28,8 @@ Change password</a>
 </div>
 [% content %]
 </div>
+[% IF settings.site_footer -%]
+[% INSERT $settings.site_footer %]
+[% END -%]
 </body>
 </html>

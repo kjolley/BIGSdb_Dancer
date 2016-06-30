@@ -1,14 +1,13 @@
 <h1>Please log in - [% desc %]</h1>
-[% IF banner %]
+[% IF banner -%]
 <div class="box" id="banner">[% banner %]</div>
-[% END %]
-
-[% IF error %]
+[% END -%]
+[% IF error -%]
 <div class="box" id="statusbad"><p>[% error %]</p></div>
-[% END %]
+[% END -%]
 
 <div class="box" id="queryform"><div class="scrollable">
-[% registration %]
+[% registration -%]
 <span class="main_icon fa fa-sign-in fa-3x pull-left"></span>
 <p>Please enter your log-in details.  Part of your IP address is used along with your
 username to set up your session. If you have a session opened on a different computer, 
@@ -28,10 +27,10 @@ password.value=CryptoJS.MD5(password.value+user.value); return true">
 
 [% submit %]
 <input type="hidden" name="session" value="[% session_id %]" />
-[% IF !password %]
+[% IF !password -%]
 <input type="hidden" name="password" value="" />
 <input type="hidden" name="route" value="[% route %]" />
-[% END %]
+[% END -%]
 </form>
 </div></div>
 

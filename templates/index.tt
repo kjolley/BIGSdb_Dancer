@@ -1,7 +1,7 @@
 <h1>[% desc %]</h1>
-[% IF banner %]
+[% IF banner -%]
 <div class="box" id="banner">[% banner %]</div>
-[% END %]
+[% END -%]
 
 <div class="box" id="index"><div class="scrollable">
 [% IF general %]
@@ -9,12 +9,10 @@
 <span class="main_icon fa fa-info-circle fa-3x pull-left"></span>
 <h2>General information</h2>
 <ul class="toplevel">
-	[% FOREACH i IN general %]
+	[% FOREACH i IN general -%]
 	<li>[% i %]</li>
 	[% END %]  
 </ul>
 </div>
-[% END %]
-
+[% END -%]
 </div></div>
-

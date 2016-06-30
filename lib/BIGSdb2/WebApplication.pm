@@ -44,7 +44,12 @@ sub initiate {
 	set template => 'template_toolkit';
 	set views    => path( dirname(__FILE__), '../../templates' );
 	set layout   => 'main';
-	set self     => $self;
+	my $path        = "$self->{'config_dir'}/templates";
+	my $header_file = "$path/site_header.tt";
+	setting site_header => $header_file if -e $header_file;
+	my $footer_file = "$path/site_footer.tt";
+	setting site_footer => $footer_file if -e $footer_file;
+	set self => $self;
 	return;
 }
 
@@ -117,6 +122,7 @@ sub _after {
 
 sub _before_template {
 	my ($tokens) = @_;
+	my $self = setting('self');
 	$tokens->{'uri_base'} = request->base->path;
 	return;
 }
