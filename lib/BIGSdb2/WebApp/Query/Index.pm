@@ -35,13 +35,58 @@ sub _print_index {
 		title      => $self->{'system'}->{'description'},
 		desc       => $self->get_db_description() || 'BIGSdb',
 		banner     => $self->get_file_text("$self->{'config_dir'}/dbases/$self->{'instance'}/banner.html"),
+		query => _get_query_section($scheme_data),
 		general    => _get_general_info_section($scheme_data),
 		javascript => $self->get_javascript_libs( [qw(jQuery)] )
 	};
 	return template 'index.tt', $params;
 }
 
-
+sub _get_query_section {
+	my ($scheme_data) = @_;
+	my $self          = setting('self');
+	my $items = [];
+	my $root = "/$self->{'instance'}";
+	if ( $self->{'system'}->{'dbtype'} eq 'isolates' ) {
+		push @$items, {label => q(Search or browse database), uri => uri_for("$root/query")};
+#		my $loci = $self->{'datastore'}->get_loci( { set_id => $set_id, do_not_order => 1 } );
+#		if (@$loci) {
+#			say qq(<li><a href="${url_root}page=profiles">Search by combinations of loci (profiles)</a></li>);
+#		}
+#	} elsif ( $system->{'dbtype'} eq 'sequences' ) {
+#		say qq(<li><a href="${url_root}page=sequenceQuery">Sequence query</a> - query an allele sequence.</li>);
+#		say qq(<li><a href="${url_root}page=batchSequenceQuery">Batch sequence query</a> - )
+#		  . q(query multiple sequences in FASTA format.</li>);
+#		say qq(<li><a href="${url_root}page=tableQuery&amp;table=sequences">Sequence attribute search</a> - )
+#		  . q(find alleles by matching criteria (all loci together)</li>);
+#		say qq(<li><a href="${url_root}page=alleleQuery&amp;table=sequences">Locus-specific sequence attribute )
+#		  . q(search</a> - select, analyse and download specific alleles.</li>);
+#		if (@$scheme_data) {
+#			my $scheme_arg  = @$scheme_data == 1 ? "&amp;scheme_id=$scheme_data->[0]->{'id'}" : '';
+#			my $scheme_desc = @$scheme_data == 1 ? $scheme_data->[0]->{'description'}         : '';
+#			say qq(<li><a href="${url_root}page=query$scheme_arg">Search, browse or enter list of )
+#			  . qq($scheme_desc profiles</a></li>);
+#			say qq(<li><a href="${url_root}page=profiles$scheme_arg">Search by combinations of $scheme_desc )
+#			  . q(alleles</a> - including partial matching.</li>);
+#			say qq(<li><a href="${url_root}page=batchProfiles$scheme_arg">Batch profile query</a> - )
+#			  . qq(lookup $scheme_desc profiles copied from a spreadsheet.</li>);
+#		}
+	}
+#	if ( $self->{'config'}->{'jobs_db'} ) {
+#		my $query_html_file = "$self->{'system'}->{'dbase_config_dir'}/$self->{'instance'}/contents/job_query.html";
+#		$self->print_file($query_html_file) if -e $query_html_file;
+#	}
+#	if ( $system->{'dbtype'} eq 'isolates' ) {
+#		my $projects = $self->{'datastore'}->run_query('SELECT COUNT(*) FROM projects WHERE list');
+#		say qq(<li><a href="${url_root}page=projects">Projects</a> - main projects defined in database.) if $projects;
+#		my $sample_fields = $self->{'xmlHandler'}->get_sample_field_list;
+#		if (@$sample_fields) {
+#			say qq(<li><a href="${url_root}page=tableQuery&amp;table=samples">Sample management</a> - )
+#			  . q(culture/DNA storage tracking</li>);
+#		}
+#	}
+	return $items;
+}
 
 sub _get_general_info_section {
 	my ($scheme_data) = @_;

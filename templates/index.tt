@@ -4,14 +4,25 @@
 [% END -%]
 
 <div class="box" id="index"><div class="scrollable">
-[% IF general %]
+[% IF query -%]
+<div style="float:left;margin-right:1em">
+<span class="main_icon fa fa-search fa-3x pull-left"></span>
+<h2>Query database</h2>
+<ul class="toplevel">
+	[% FOREACH item IN query -%]
+	<li><a href="[% item.uri %]">[% item.label %]</a></li>
+	[% END -%]  
+</ul>
+</div>
+[% END -%]
+[% IF general -%]
 <div style="float:left; margin-right:1em">
 <span class="main_icon fa fa-info-circle fa-3x pull-left"></span>
 <h2>General information</h2>
 <ul class="toplevel">
 	[% FOREACH i IN general -%]
 	<li>[% i %]</li>
-	[% END %]  
+	[% END -%]  
 </ul>
 </div>
 [% END -%]
