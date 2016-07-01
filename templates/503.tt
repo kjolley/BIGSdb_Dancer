@@ -1,0 +1,9 @@
+<h1>[% title %]</h1>
+<div class="box" id="statusbad">
+<span class="warning_icon fa fa-wrench fa-5x pull-left"></span>
+<h2 style="font-size:3em">Service unavailable</h2>
+<p style="color:black">The system is currently unavailable.</p>
+<h2>Error details:</h2>
+<p>[% content %]</p>
+<div style="clear:both"></div>
+</div>

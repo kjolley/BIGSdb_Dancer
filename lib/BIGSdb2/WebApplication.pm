@@ -22,6 +22,7 @@ use warnings;
 use 5.010;
 use parent qw(BIGSdb2::Application);
 use Dancer2;
+use Dancer2::Core::Error;
 use Config::Tiny;
 use Try::Tiny;
 use List::MoreUtils qw(uniq);
@@ -36,6 +37,18 @@ use BIGSdb2::Constants qw(:interface :authentication);
 hook before                 => sub { _before() };
 hook after                  => sub { _after() };
 hook before_template_render => sub { _before_template() };
+any qr/.*/x                 => sub {
+	my $self = setting('self');
+	$self->throw_error(
+		{
+			status         => 404,
+			message        => 'Page not found',
+			no_status_desc => 1,
+			details        => 'Unknown function requested - either an incorrect link brought you here or '
+			  . 'this functionality has not been implemented yet'
+		}
+	);
+};
 
 sub initiate {
 	my ($self) = @_;
@@ -55,26 +68,54 @@ sub initiate {
 
 #Read database configs and connect before entering route.
 sub _before {
-	my $self        = setting('self');
+	my $self = setting('self');
+
+	#TODO Check file upload size and limit if needed
 	my $request_uri = request->uri;
 	$self->{'instance'} = $request_uri =~ /^\/([\w\d\-_]+)/x ? $1 : '';
 	my $full_path = "$self->{'config_dir'}/dbases/$self->{'instance'}/config.xml";
 	if ( !$self->{'instance'} ) {
 		return;    #No database - just return landing page.
 	} elsif ( !-e $full_path ) {
-		send_error( "Database $self->{'instance'} has not been defined", 404 );
+		$self->throw_error(
+			{
+				status  => 404,
+				message => 'Database configuration not defined',
+				details => "No configuration called '$self->{'instance'}' exists.",
+				error   => "Database config file for '$self->{'instance'}' does not exist."
+			}
+		);
 	} else {
 		$self->{'xmlHandler'} = BIGSdb2::Parser->new;
 		my $parser = XML::Parser::PerlSAX->new( Handler => $self->{'xmlHandler'} );
 		eval { $parser->parse( Source => { SystemId => $full_path } ) };
 		if ($@) {
-			$logger->fatal("Invalid XML description: $@") if $self->{'instance'} ne '';
 			undef $self->{'system'};
-			return;
+			$self->throw_error(
+				{
+					status  => 500,
+					message => 'Invalid XML description',
+					details => 'The config XML file for this database configuration is malformed.',
+					error   => $@
+				}
+			);
 		}
 		$self->{'system'} = $self->{'xmlHandler'}->get_system_hash;
 	}
 	$self->set_system_overrides;
+	if ( !defined $self->{'system'}->{'dbtype'}
+		|| ( $self->{'system'}->{'dbtype'} ne 'sequences' && $self->{'system'}->{'dbtype'} ne 'isolates' ) )
+	{
+		$self->throw_error(
+			{
+				status  => 500,
+				message => 'Invalid database type specified',
+				details => q(Please set dbtype to either 'isolates' or 'sequences' in the system )
+				  . q(attributes of the XML description file for this database.),
+				error => $@
+			}
+		);
+	}
 	$ENV{'PATH'} = '/bin:/usr/bin';    ## no critic (RequireLocalizedPunctuationVars) #so we don't foul taint check
 	delete @ENV{qw(IFS CDPATH ENV BASH_ENV)};    # Make %ENV safer
 	$self->{'system'}->{'read_access'} //= 'public';                                      #everyone can view by default
@@ -93,8 +134,21 @@ sub _before {
 	}
 	$self->{'dataConnector'}->initiate( $self->{'system'}, $self->{'config'} );
 	$self->db_connect;
-	send_error( 'No access to databases - undergoing maintenance.', 503 ) if !$self->{'db'};
-	$self->initiate_authdb;
+	if ( !$self->{'db'} ) {
+		$self->throw_error(
+			{
+				status  => 503,
+				message => 'No access to databases',
+				details => 'The system is currently undergoing maintenance.',
+			}
+		);
+	}
+	try {
+		$self->initiate_authdb;
+	}
+	catch {
+		$self->throw_error( { status => 500, message => 'Cannot connect to authentication database!', } );
+	};
 	$self->setup_datastore;
 
 	#	$self->_initiate_view;
@@ -122,7 +176,6 @@ sub _after {
 
 sub _before_template {
 	my ($tokens) = @_;
-	my $self = setting('self');
 	$tokens->{'uri_base'} = request->base->path;
 	return;
 }
@@ -203,6 +256,28 @@ sub is_admin {
 	}
 	return;
 }
+
+sub throw_error {
+	my ( $self, $options ) = @_;
+	$options->{'status'}  //= 500;
+	$options->{'message'} //= q(BIGSdb has encountered an unspecified error.);
+	$options->{'details'} //= q();
+	$logger->error( $options->{'error'} ) if $options->{'error'};
+	my $status_desc =
+	  { 401 => 'Unauthorized', 404 => 'Not Found', 500 => 'Internal Server Error', 503 => 'Service Unavailable' };
+	my $content = $options->{'message'};
+	$content .= ": $options->{'details'}" if $options->{'details'};
+	$status_desc->{ $options->{'status'} } = q() if $options->{'no_status_desc'};
+	Dancer2::Core::Error->new(
+		response => response(),
+		title    => "Error $options->{'status'} $status_desc->{$options->{'status'}} - $options->{'message'}",
+		status   => $options->{'status'},
+		message  => $content,
+		app      => app()
+	)->throw;
+	halt();
+	return;
+}
 ###############
 #Authentication
 ###############
@@ -213,6 +288,27 @@ sub _is_authorized {
 	if ( session('user') ) {
 		my $user_info = $self->{'datastore'}->get_user_info_from_username( session('user') );
 		session full_name => "$user_info->{'first_name'} $user_info->{'surname'}";
+		my $config_access    = $self->is_user_allowed_access( session('user') );
+		my $user_permissions = $self->{'datastore'}->get_permissions( session('user') );
+		if ( $user_permissions->{'disable_access'} ) {
+			$self->throw_error(
+				{
+					status  => 401,
+					message => 'Access disabled',
+					details => 'Your user account has been disabled. If you believe this to be an error, '
+					  . 'please contact the system administrator.',
+				}
+			);
+		} elsif ( !$config_access ) {
+			$self->throw_error(
+				{
+					status  => 401,
+					message => 'Access denied',
+					details => 'Your user account cannot access this database configuration. If you believe this to '
+					  . 'be an error, please contact the system administrator.',
+				}
+			);
+		}
 		return 1;
 	}
 

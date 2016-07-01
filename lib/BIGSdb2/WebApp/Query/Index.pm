@@ -35,67 +35,69 @@ sub _print_index {
 		title      => $self->{'system'}->{'description'},
 		desc       => $self->get_db_description() || 'BIGSdb',
 		banner     => $self->get_file_text("$self->{'config_dir'}/dbases/$self->{'instance'}/banner.html"),
-		query => _get_query_section($scheme_data),
-		general    => _get_general_info_section($scheme_data),
+		query      => _get_query_items($scheme_data),
+		general    => _get_general_items($scheme_data),
 		javascript => $self->get_javascript_libs( [qw(jQuery)] )
 	};
 	return template 'index.tt', $params;
 }
 
-sub _get_query_section {
+sub _get_query_items {
 	my ($scheme_data) = @_;
 	my $self          = setting('self');
-	my $items = [];
-	my $root = "/$self->{'instance'}";
+	my $items         = [];
+	my $root          = "/$self->{'instance'}";
+	my $set_id        = $self->get_set_id;
 	if ( $self->{'system'}->{'dbtype'} eq 'isolates' ) {
-		push @$items, {label => q(Search or browse database), uri => uri_for("$root/query")};
-#		my $loci = $self->{'datastore'}->get_loci( { set_id => $set_id, do_not_order => 1 } );
-#		if (@$loci) {
-#			say qq(<li><a href="${url_root}page=profiles">Search by combinations of loci (profiles)</a></li>);
-#		}
-#	} elsif ( $system->{'dbtype'} eq 'sequences' ) {
-#		say qq(<li><a href="${url_root}page=sequenceQuery">Sequence query</a> - query an allele sequence.</li>);
-#		say qq(<li><a href="${url_root}page=batchSequenceQuery">Batch sequence query</a> - )
-#		  . q(query multiple sequences in FASTA format.</li>);
-#		say qq(<li><a href="${url_root}page=tableQuery&amp;table=sequences">Sequence attribute search</a> - )
-#		  . q(find alleles by matching criteria (all loci together)</li>);
-#		say qq(<li><a href="${url_root}page=alleleQuery&amp;table=sequences">Locus-specific sequence attribute )
-#		  . q(search</a> - select, analyse and download specific alleles.</li>);
-#		if (@$scheme_data) {
-#			my $scheme_arg  = @$scheme_data == 1 ? "&amp;scheme_id=$scheme_data->[0]->{'id'}" : '';
-#			my $scheme_desc = @$scheme_data == 1 ? $scheme_data->[0]->{'description'}         : '';
-#			say qq(<li><a href="${url_root}page=query$scheme_arg">Search, browse or enter list of )
-#			  . qq($scheme_desc profiles</a></li>);
-#			say qq(<li><a href="${url_root}page=profiles$scheme_arg">Search by combinations of $scheme_desc )
-#			  . q(alleles</a> - including partial matching.</li>);
-#			say qq(<li><a href="${url_root}page=batchProfiles$scheme_arg">Batch profile query</a> - )
-#			  . qq(lookup $scheme_desc profiles copied from a spreadsheet.</li>);
-#		}
+		push @$items, { label => q(Search or browse database), uri => uri_for("$root/query") };
+		my $loci = $self->{'datastore'}->get_loci( { set_id => $set_id, do_not_order => 1 } );
+		if (@$loci) {
+			push @$items, { label => q(Search by combinations of loci (profiles)) };
+		}
+	} elsif ( $self->{'system'}->{'dbtype'} eq 'sequences' ) {
+		push @$items, { label => q(Sequence query),       comment => q(query an allele sequence) };
+		push @$items, { label => q(Batch sequence query), comment => q(query multiple sequences in FASTA format) };
+		push @$items,
+		  {
+			label   => q(Sequence attribute search),
+			comment => q(find alleles by matching criteria (all loci together))
+		  };
+		push @$items,
+		  {
+			label   => q(Locus-specific sequence attribute),
+			comment => q(select, analyse and download specific alleles)
+		  };
+		if (@$scheme_data) {
+
+			#Specify scheme_id if only one defined, otherwise use a general URI
+			my $scheme_desc = @$scheme_data == 1 ? $scheme_data->[0]->{'description'} : q();
+			push @$items, { label => qq(Search, browse or enter list of $scheme_desc profiles) };
+			push @$items,
+			  { label => qq(Search by combinations of $scheme_desc alleles), comment => q(including partial matching) };
+			push @$items,
+			  {
+				label   => q(Batch profile query),
+				comment => qq(lookup $scheme_desc profiles copied from a spreadsheet)
+			  };
+		}
 	}
-#	if ( $self->{'config'}->{'jobs_db'} ) {
-#		my $query_html_file = "$self->{'system'}->{'dbase_config_dir'}/$self->{'instance'}/contents/job_query.html";
-#		$self->print_file($query_html_file) if -e $query_html_file;
-#	}
-#	if ( $system->{'dbtype'} eq 'isolates' ) {
-#		my $projects = $self->{'datastore'}->run_query('SELECT COUNT(*) FROM projects WHERE list');
-#		say qq(<li><a href="${url_root}page=projects">Projects</a> - main projects defined in database.) if $projects;
-#		my $sample_fields = $self->{'xmlHandler'}->get_sample_field_list;
-#		if (@$sample_fields) {
-#			say qq(<li><a href="${url_root}page=tableQuery&amp;table=samples">Sample management</a> - )
-#			  . q(culture/DNA storage tracking</li>);
-#		}
-#	}
+
+	#TODO Rule queries
+	if ( $self->{'system'}->{'dbtype'} eq 'isolates' ) {
+		my $projects = $self->{'datastore'}->run_query('SELECT COUNT(*) FROM projects WHERE list');
+		push @$items, { label => q(Projects), comment => q(main projects defined in database) } if $projects;
+	}
 	return $items;
 }
 
-sub _get_general_info_section {
+sub _get_general_items {
 	my ($scheme_data) = @_;
 	my $self          = setting('self');
 	my $items         = [];
 	my $max_date;
 	if ( $self->{'system'}->{'dbtype'} eq 'sequences' ) {
 		my $allele_count = _get_allele_count();
-		push @$items, qq(Number of sequences: $allele_count);
+		push @$items, { label => qq(Number of sequences: $allele_count) };
 		my $tables = [qw (locus_stats profiles profile_refs accession)];
 		$max_date = _get_max_date($tables);
 		if ( @$scheme_data == 1 ) {
@@ -103,36 +105,37 @@ sub _get_general_info_section {
 				my $profile_count =
 				  $self->{'datastore'}
 				  ->run_query( 'SELECT COUNT(*) FROM profiles WHERE scheme_id=?', $scheme_data->[0]->{'id'} );
-				push @$items, qq(Number of profiles ($scheme_data->[0]->{'description'}): $profile_count);
+				push @$items, { label => qq(Number of profiles ($scheme_data->[0]->{'description'}): $profile_count) };
 			}
 		} elsif ( @$scheme_data > 1 ) {
-			my $buffer = q(Number of profiles: <a id="toggle1" class="showhide">Show</a>)
-			  . q(<a id="toggle2" class="hideshow">Hide</a><div class="hideshow"><ul>);
-			foreach (@$scheme_data) {
+			my $item = { label => q(Number of profiles), hidelist => 1 };
+			my $hide_list = [];
+			foreach my $scheme (@$scheme_data) {
 				my $profile_count =
-				  $self->{'datastore'}->run_query( 'SELECT COUNT(*) FROM profiles WHERE scheme_id=?', $_->{'id'} );
-				$_->{'description'} =~ s/\&/\&amp;/gx;
-				$buffer .= qq(<li>$_->{'description'}: $profile_count</li>);
+				  $self->{'datastore'}->run_query( 'SELECT COUNT(*) FROM profiles WHERE scheme_id=?', $scheme->{'id'} );
+				$scheme->{'description'} =~ s/\&/\&amp;/gx;
+				push @$hide_list, { label => qq($scheme->{'description'}: $profile_count) };
 			}
-			$buffer .= q(</ul></div>);
-			push @$items, $buffer;
+			$item->{'hidelist'} = $hide_list;
+			push @$items, $item;
 		}
 	} else {
 		my $count = $self->{'datastore'}->run_query("SELECT COUNT(*) FROM $self->{'system'}->{'view'}");
-		push @$items, qq(Isolates: $count);
+		push @$items, { label => qq(Isolates: $count) };
 		my $tables = [qw (isolates isolate_aliases allele_designations allele_sequences refs)];
 		$max_date = _get_max_date($tables);
 	}
-	push @$items, qq(Last updated: $max_date);
+	push @$items, { label => qq(Last updated: $max_date) };
+
+	#TODO Update history links
 	if ( $self->{'system'}->{'dbtype'} eq 'sequences' ) {
-		my $history = uri_for("/$self->{'instance'}/tableQuery/history");
-		push @$items, qq(<a href="$history">Profile update history</a>);
+
+	 #		push @$items, { label => q(Profile update history), uri => uri_for("/$self->{'instance'}/tableQuery/history") };
 	} else {
-		my $history = uri_for("/$self->{'instance'}/tableQuery/history");
-		push @$items, qq(<a href="$history">Update history</a>);
+
+		#		push @$items, { label => q(Update history), uri => uri_for("/$self->{'instance'}/tableQuery/history") };
 	}
-	my $about = uri_for("/$self->{'instance'}/about");
-	push @$items, qq(<a href="$about">About BIGSdb</a>);
+	push @$items, { label => q(About BIGSdb), uri => uri_for("/$self->{'instance'}/about") };
 	return $items;
 }
 

@@ -21,6 +21,7 @@ use strict;
 use warnings;
 use 5.010;
 use Dancer2;
+use Carp;
 use Config::Tiny;
 use Try::Tiny;
 use List::MoreUtils qw(uniq);
@@ -175,7 +176,7 @@ sub db_connect {
 		$self->{'db'} = $self->{'dataConnector'}->get_connection( \%att );
 	}
 	catch {
-		$logger->error("Can not connect to database '$self->{'system'}->{'db'}'");
+		$logger->error("Cannot connect to database '$self->{'system'}->{'db'}'");
 	};
 	return;
 }
@@ -194,8 +195,7 @@ sub initiate_authdb {
 		$logger->info("Connected to authentication database '$self->{'config'}->{'auth_db'}'");
 	}
 	catch {
-		$logger->error("Can not connect to authentication database '$self->{'config'}->{'auth_db'}'");
-		$self->{'error'} = 'noAuth';
+		croak 'Cannot connect to authentication database!';
 	};
 	return;
 }
@@ -250,5 +250,46 @@ sub get_file_text {
 		return $$text_ref;
 	}
 	return q();
+}
+
+sub is_user_allowed_access {
+	my ( $self, $username ) = @_;
+	if ( ( $self->{'system'}->{'curators_only'} // q() ) eq 'yes' ) {
+		my $status = $self->{'datastore'}->run_query( 'SELECT status FROM users WHERE user_name=?', $username );
+		return 0 if !$status || $status eq 'user';
+		return 0 if $status eq 'submitter' && !$self->{'curate'};
+	}
+	return 1 if !$self->{'system'}->{'default_access'};
+	if ( $self->{'system'}->{'default_access'} eq 'deny' ) {
+		my $allow_file = "$self->{'config_dir'}/dbases/$self->{'instance'}/users.allow";
+		return 1 if -e $allow_file && $self->_is_name_in_file( $username, $allow_file );
+		return 0;
+	} elsif ( $self->{'system'}->{'default_access'} eq 'allow' ) {
+		my $deny_file = "$self->{'config_dir'}/dbases/$self->{'instance'}/users.deny";
+		return 0 if -e $deny_file && $self->_is_name_in_file( $username, $deny_file );
+		return 1;
+	} else {
+		return 0;
+	}
+}
+
+sub _is_name_in_file {
+	my ( $self, $name, $filename ) = @_;
+	if (!-e $filename){
+		$logger->error("File $filename does not exist");
+		return;
+	}
+	open( my $fh, '<', $filename ) || $logger->error("Cannot open $filename for reading");
+	while ( my $line = <$fh> ) {
+		next if $line =~ /^\#/x;
+		$line =~ s/^\s+//x;
+		$line =~ s/\s+$//x;
+		if ( $line eq $name ) {
+			close $fh;
+			return 1;
+		}
+	}
+	close $fh;
+	return 0;
 }
 1;

@@ -1,0 +1,11 @@
+<h1>[% title %]</h1>
+<div class="box" id="statusbad">
+<span class="warning_icon fa fa-thumbs-o-down fa-5x pull-left"></span>
+<h2 style="font-size:3em">Oops ...</h2>
+<p style="color:black">We have encountered an internal error. This is most likely due to a misconfiguration
+but could also be an error in BIGSdb. There may be further details 
+available in the system log file.</p>
+<h2>Error details:</h2>
+<p>[% content %]</p>
+<div style="clear:both"></div>
+</div>
