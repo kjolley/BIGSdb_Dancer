@@ -5,7 +5,9 @@
 <p style="color:black">We have encountered an internal error. This is most likely due to a misconfiguration
 but could also be an error in BIGSdb. There may be further details 
 available in the system log file.</p>
+[% IF content -%]
 <h2>Error details:</h2>
 <p>[% content %]</p>
+[% END -%]
 <div style="clear:both"></div>
 </div>

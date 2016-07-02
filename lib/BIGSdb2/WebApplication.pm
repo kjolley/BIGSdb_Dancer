@@ -32,7 +32,8 @@ my $logger = get_logger('BIGSdb.Application_Initiate');
 use BIGSdb2::WebApp::About;
 use BIGSdb2::WebApp::ChangePassword;
 use BIGSdb2::WebApp::Login;
-use BIGSdb2::WebApp::Query::Index;
+use BIGSdb2::WebApp::Public::Index;
+use BIGSdb2::WebApp::Public::Query;
 use BIGSdb2::Constants qw(:interface :authentication);
 hook before                 => sub { _before() };
 hook after                  => sub { _after() };
@@ -278,9 +279,7 @@ sub throw_error {
 	halt();
 	return;
 }
-###############
-#Authentication
-###############
+
 sub _is_authorized {
 	my ($self) = @_;
 	$self->_cookie_login;
@@ -434,5 +433,101 @@ sub _password_reset_required {
 		[ $self->{'system'}->{'db'}, $session, 'active', $username ],
 		{ db => $self->{'auth_db'}, cache => 'Login::password_reset_required' }
 	);
+}
+
+sub get_field_selection_list {
+
+	#options passed as hashref:
+	#isolate_fields: include isolate fields, prefix with f_
+	#extended_attributes: include isolate field extended attributes, named e_FIELDNAME||EXTENDED-FIELDNAME
+	#loci: include loci, prefix with either l_ or cn_ (common name)
+	#locus_limit: don't include loci if there are more than the set value
+	#query_pref: only the loci for which the user has a query field preference selected will be returned
+	#analysis_pref: only the loci for which the user has an analysis preference selected will be returned
+	#scheme_fields: include scheme fields, prefix with s_SCHEME-ID_
+	#classification_groups: include classification group ids and field, prefix with cg_
+	#sort_labels: dictionary sort labels
+	my ( $self, $options ) = @_;
+	$logger->logdie('Invalid option hashref') if ref $options ne 'HASH';
+	$options->{'query_pref'}    //= 1;
+	$options->{'analysis_pref'} //= 0;
+	my $values = [];
+	if ( $options->{'isolate_fields'} ) {
+		my $isolate_fields = $self->_get_provenance_fields($options);
+		push @$values, @$isolate_fields;
+	}
+	if ( $options->{'loci'} ) {
+		my $loci = $self->_get_loci_list($options);
+		push @$values, @$loci;
+	}
+	if ( $options->{'scheme_fields'} ) {
+		my $scheme_fields = $self->_get_scheme_fields($options);
+		push @$values, @$scheme_fields;
+	}
+	if ( $options->{'classification_groups'} ) {
+		my $classification_group_fields = $self->_get_classification_groups_fields;
+		push @$values, @$classification_group_fields;
+	}
+	if ( $options->{'sort_labels'} ) {
+		$values = BIGSdb::Utils::dictionary_sort( $values, $self->{'cache'}->{'labels'} );
+	}
+	return $values, $self->{'cache'}->{'labels'};
+}
+
+sub _get_provenance_fields {
+	my ( $self, $options ) = @_;
+	my @isolate_list;
+	my $set_id        = $self->get_set_id;
+	my $metadata_list = $self->{'datastore'}->get_set_metadata( $set_id, { curate => $self->{'curate'} } );
+	my $fields        = $self->{'xmlHandler'}->get_field_list($metadata_list);
+	my $attributes    = $self->{'xmlHandler'}->get_all_field_attributes;
+	my $extended      = $options->{'extended_attributes'} ? $self->get_extended_attributes : undef;
+	foreach my $field (@$fields) {
+
+		if (   ( $options->{'sender_attributes'} )
+			&& ( $field eq 'sender' || $field eq 'curator' || ( $attributes->{$field}->{'userfield'} // '' ) eq 'yes' )
+		  )
+		{
+			foreach my $user_attribute (qw (id surname first_name affiliation)) {
+				push @isolate_list, "f_$field ($user_attribute)";
+				( $self->{'cache'}->{'labels'}->{"f_$field ($user_attribute)"} = "$field ($user_attribute)" ) =~
+				  tr/_/ /;
+			}
+		} else {
+			push @isolate_list, "f_$field";
+			my ( $metaset, $metafield ) = $self->get_metaset_and_fieldname($field);
+			( $self->{'cache'}->{'labels'}->{"f_$field"} = $metafield // $field ) =~ tr/_/ /;
+			if ( $options->{'extended_attributes'} ) {
+				my $extatt = $extended->{$field};
+				if ( ref $extatt eq 'ARRAY' ) {
+					foreach my $extended_attribute (@$extatt) {
+						push @isolate_list, "e_$field||$extended_attribute";
+						( $self->{'cache'}->{'labels'}->{"e_$field||$extended_attribute"} = $extended_attribute ) =~
+						  tr/_/ /;
+					}
+				}
+			}
+		}
+	}
+	return \@isolate_list;
+}
+
+sub get_extended_attributes {
+	my ($self) = @_;
+	my $data =
+	  $self->{'datastore'}
+	  ->run_query( 'SELECT isolate_field,attribute FROM isolate_field_extended_attributes ORDER BY field_order',
+		undef, { fetch => 'all_arrayref', slice => {}, cache => 'Page::get_extended_attributes' } );
+	my $extended;
+	foreach (@$data) {
+		push @{ $extended->{ $_->{'isolate_field'} } }, $_->{'attribute'};
+	}
+	return $extended;
+}
+
+sub get_metaset_and_fieldname {
+	my ( $self, $field ) = @_;
+	my ( $metaset, $metafield ) = $field =~ /meta_([^:]+):(.*)/x ? ( $1, $2 ) : ( undef, undef );
+	return ( $metaset, $metafield );
 }
 1;

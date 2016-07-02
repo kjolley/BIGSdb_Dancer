@@ -1,0 +1,80 @@
+<h1>[% title %]</h1>
+<noscript><div class="box statusbad"><p>The dynamic customisation of this interface requires
+that you enable Javascript in your browser.</p></div></noscript>
+<div class="box" id="queryform"><div class="scrollable">
+[% PROCESS provenance -%]
+[% submit %]
+</div></div>
+
+
+
+[% BLOCK provenance -%]
+[% IF provenance_elements > 1 -%]
+[% multi_prov_fields = 'inline' -%]
+[% ELSE -%]
+[% multi_prov_fields = 'none' -%]
+[% END -%]
+<fieldset id="provenance_fieldset" style="float:left;display:[% provenance_fieldset_display %]">
+<legend>Isolate provenance/phenotype fields</legend>
+<span id="prov_field_heading" style="display:[% multi_prov_fields %]">
+<label for="prov_andor">Combine with: </label>
+<select name="prov_andor" id="prov_andor">
+<option value="AND">AND</option>
+<option value="OR">OR</option>
+</select></span>
+<ul id="provenance">
+[% i=0 -%]
+[% WHILE i < provenance_elements %][% i=i+1 %][% INCLUDE 'public/query/provenance.tt' %][% END %]	
+</ul></fieldset>
+[% END -%]
+
+[% BLOCK designations -%]
+[% END -%]
+
+[% BLOCK allele_count -%]
+[% END -%]
+
+[% BLOCK allele_status -%]
+[% END -%]
+
+[% BLOCK tag_count -%]
+[% END -%]
+
+[% BLOCK tags -%]
+[% END -%]
+
+[% BLOCK list -%]
+[% END -%]
+
+[% BLOCK filters -%]
+[% END -%]
+
+[% BLOCK display -%]
+[% END -%]
+
+[% BLOCK modify_search -%]
+[% END -%]
+
+[% BLOCK tooltip_add_text -%]
+<h3>Search values</h3>
+<p>Empty field values can be searched using the term 'null'.</p>
+<h3>Number of fields</h3><p>Add more fields by clicking the '+' button.</p>
+<h3>Query modifier</h3><p>Select 'AND' for the isolate query to match ALL search 
+terms, 'OR' to match ANY of these terms.</p>
+[% END -%]
+
+<script type="text/Javascript">
+$(function () {
+	var pe=[% provenance_elements %];
+	$("#add_provenance_fields").click(function(){
+		pe=pe+1;
+		var url="[% uri_base %]/[% db %]/provenance_fields/"+pe;
+		$("ul#provenance").append('<li id="pf'+pe+'"></li>');
+		$("li#pf"+pe).html('<img src="/javascript/themes/default/throbber.gif" /> Loading ...').load(url);
+		$("span#prov_field_heading").show();
+		if (pe >= [% max_rows %]){
+			$("#add_provenance_fields").hide();
+		}
+	});
+});
+</script>

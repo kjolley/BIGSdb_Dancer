@@ -1,0 +1,17 @@
+<li>
+<span style="white-space:nowrap">
+<select name="prov_field[% i %]"  class="fieldlist" id="prov_field[% i %]">
+[% FOREACH item IN provenance_items %]<option value="[% item.field %]">[% item.label %]</option>
+[% END -%]
+</select>
+<select name="prov_operator[% i %]" >
+[% FOREACH item IN operators %]<option>[% item %]</option>
+[% END -%]
+</select>
+<input type="text" name="prov_value[% i %]" class="value_entry" id="prov_value[% i %]" placeholder="Enter value..." />
+[% IF i==1 -%]
+<a id="add_provenance_fields" class="button" style="cursor:pointer">+</a>
+<a class="tooltip" id="prov_tooltip" title="[% PROCESS tooltip_add_text %]">
+<span class="fa fa-info-circle"></span></a>
+[% END -%]
+</span></li>	
