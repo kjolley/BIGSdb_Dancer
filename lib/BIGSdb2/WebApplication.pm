@@ -25,13 +25,14 @@ use Dancer2;
 use Dancer2::Core::Error;
 use Config::Tiny;
 use Try::Tiny;
-use List::MoreUtils qw(uniq);
+use List::MoreUtils qw(uniq none);
 use Digest::MD5;
 use Log::Log4perl qw(get_logger);
 my $logger = get_logger('BIGSdb.Application_Initiate');
 use BIGSdb2::WebApp::About;
 use BIGSdb2::WebApp::ChangePassword;
 use BIGSdb2::WebApp::Login;
+use BIGSdb2::WebApp::Preferences;
 use BIGSdb2::WebApp::Public::Index;
 use BIGSdb2::WebApp::Public::Query;
 use BIGSdb2::Constants qw(:interface :authentication);
@@ -151,8 +152,10 @@ sub _before {
 		$self->throw_error( { status => 500, message => 'Cannot connect to authentication database!', } );
 	};
 	$self->setup_datastore;
+	$self->_setup_prefstore;
 
 	#	$self->_initiate_view;
+	return if request->is_ajax;
 	my $authenticated_db = ( $self->{'system'}->{'read_access'} // '' ) ne 'public';
 	my $login_route      = "/$self->{'instance'}/login";
 	my $logout_route     = "/$self->{'instance'}/logout";
@@ -435,6 +438,20 @@ sub _password_reset_required {
 	);
 }
 
+sub get_guid {
+
+	#If the user is logged in, use a combination of database and user names as the
+	#GUID for preference storage, otherwise use a random GUID which is stored as a browser cookie.
+	my ($self) = @_;
+	if ( defined session('user') ) {
+		return "$self->{'system'}->{'db'}\|" . session('user');
+	} elsif ( $self->get_cookie('guid') ) {
+		return $self->get_cookie('guid');
+	} else {
+		return 0;
+	}
+}
+
 sub get_field_selection_list {
 
 	#options passed as hashref:
@@ -529,5 +546,296 @@ sub get_metaset_and_fieldname {
 	my ( $self, $field ) = @_;
 	my ( $metaset, $metafield ) = $field =~ /meta_([^:]+):(.*)/x ? ( $1, $2 ) : ( undef, undef );
 	return ( $metaset, $metafield );
+}
+
+sub initiate_prefs {
+	my ( $self, $options ) = @_;
+	return if !$self->{'prefstore'};
+	my ( $general_prefs, $field_prefs, $scheme_field_prefs );
+	my $guid = $self->get_guid || 1;
+	try {
+		$self->{'prefstore'}->update_datestamp($guid);
+	}
+	catch {
+		undef $self->{'prefstore'};
+
+		#		$self->{'fatal'} = 'prefstoreConfig';
+	};
+	return if !$options->{'general'} && !$options->{'query_field'};
+	return if !$self->{'prefstore'};
+	my $dbname = $self->{'system'}->{'db'};
+	$field_prefs = $self->{'prefstore'}->get_all_field_prefs( $guid, $dbname );
+	$scheme_field_prefs = $self->{'prefstore'}->get_all_scheme_field_prefs( $guid, $dbname );
+	if ( $options->{'general'} ) {
+		$general_prefs = $self->{'prefstore'}->get_all_general_prefs( $guid, $dbname );
+		$self->{'prefs'}->{'displayrecs'} = $general_prefs->{'displayrecs'} // 25;
+		$self->{'prefs'}->{'pagebar'}     = $general_prefs->{'pagebar'}     // 'top and bottom';
+		$self->{'prefs'}->{'alignwidth'}  = $general_prefs->{'alignwidth'}  // 100;
+		$self->{'prefs'}->{'flanking'}    = $general_prefs->{'flanking'}    // 100;
+		foreach (
+			qw(set_id submit_allele_technology submit_allele_read_length
+			submit_allele_coverage submit_allele_assembly submit_allele_software)
+		  )
+		{
+			$self->{'prefs'}->{$_} = $general_prefs->{$_};
+		}
+
+		#default off
+		foreach (qw (hyperlink_loci )) {
+			$general_prefs->{$_} //= 'off';
+			$self->{'prefs'}->{$_} = $general_prefs->{$_} eq 'on' ? 1 : 0;
+		}
+
+		#default on
+		foreach (qw (tooltips submit_email)) {
+			$general_prefs->{$_} //= 'on';
+			$self->{'prefs'}->{$_} = $general_prefs->{$_} eq 'off' ? 0 : 1;
+		}
+	}
+	if ( $self->{'system'}->{'dbtype'} eq 'isolates' ) {
+		$self->_initiate_isolatedb_prefs( $options, $general_prefs, $field_prefs, $scheme_field_prefs );
+	}
+
+	#Set dropdown status for scheme fields
+	if ( $options->{'query_field'} ) {
+		my $scheme_ids =
+		  $self->{'datastore'}->run_query( 'SELECT id FROM schemes', undef, { fetch => 'col_arrayref' } );
+		my $scheme_fields              = $self->{'datastore'}->get_all_scheme_fields;
+		my $scheme_field_default_prefs = $self->{'datastore'}->get_all_scheme_field_info;
+		foreach my $scheme_id (@$scheme_ids) {
+			foreach ( @{ $scheme_fields->{$scheme_id} } ) {
+				foreach my $action (qw(dropdown)) {
+					if ( defined $scheme_field_prefs->{$scheme_id}->{$_}->{$action} ) {
+						$self->{'prefs'}->{"$action\_scheme_fields"}->{$scheme_id}->{$_} =
+						  $scheme_field_prefs->{$scheme_id}->{$_}->{$action} ? 1 : 0;
+					} else {
+						$self->{'prefs'}->{"$action\_scheme_fields"}->{$scheme_id}->{$_} =
+						  $scheme_field_default_prefs->{$scheme_id}->{$_}->{$action};
+					}
+				}
+			}
+		}
+	}
+	$self->{'datastore'}->update_prefs( $self->{'prefs'} );
+	return;
+}
+
+sub _initiate_isolatedb_prefs {
+	my ( $self, $options, $general_prefs, $field_prefs, $scheme_field_prefs ) = @_;
+	my $set_id           = $self->get_set_id;
+	my $metadata_list    = $self->{'datastore'}->get_set_metadata($set_id);
+	my $field_list       = $self->{'xmlHandler'}->get_field_list($metadata_list);
+	my $field_attributes = $self->{'xmlHandler'}->get_all_field_attributes;
+	my $extended         = $self->get_extended_attributes;
+	my $args             = {
+		field_list       => $field_list,
+		field_prefs      => $field_prefs,
+		extended         => $extended,
+		field_attributes => $field_attributes
+	};
+
+	#Parameters set by preference store via session cookie
+	my $guid = $self->get_guid || 1;
+	my $dbname = $self->{'system'}->{'db'};
+	$self->_initiate_isolatedb_general_prefs($general_prefs) if $options->{'general'};
+	$self->_initiate_isolatedb_query_field_prefs($args)      if $options->{'query_field'};
+	$self->_initiate_isolatedb_main_display_prefs($args)     if $options->{'main_display'};
+	return if none { $options->{$_} } qw (isolate_display main_display query_field analysis);
+	$self->_initiate_isolatedb_locus_prefs( $options, $guid, $dbname );
+	$self->_initiate_isolatedb_scheme_prefs( $guid, $dbname, $field_prefs, $scheme_field_prefs );
+	return;
+}
+
+sub _initiate_isolatedb_general_prefs {
+	my ( $self, $general_prefs ) = @_;
+
+	#default off
+	foreach my $option (
+		qw (update_details allele_flags scheme_members_alias sequence_details_main
+		display_seqbin_main display_contig_count display_publications)
+	  )
+	{
+		$general_prefs->{$option} //= 'off';
+		$self->{'prefs'}->{$option} = $general_prefs->{$option} eq 'on' ? 1 : 0;
+	}
+
+	#default on
+	foreach my $option (qw (sequence_details sample_details mark_provisional mark_provisional_main)) {
+		$general_prefs->{$option} //= 'on';
+		$self->{'prefs'}->{$option} = $general_prefs->{$option} eq 'off' ? 0 : 1;
+	}
+
+	#Locus aliases - default off
+	my $default_locus_aliases = ( $self->{'system'}->{'locus_aliases'} // '' ) eq 'yes' ? 1 : 0;
+	$general_prefs->{'locus_alias'} //= 'off';
+	$self->{'prefs'}->{'locus_alias'} = $general_prefs->{'locus_alias'} eq 'on' ? 1 : $default_locus_aliases;
+	return;
+}
+
+sub _initiate_isolatedb_query_field_prefs {
+	my ( $self, $args ) = @_;
+	my ( $field_list, $field_prefs, $field_attributes, $extended ) =
+	  @{$args}{qw(field_list field_prefs field_attributes extended)};
+	foreach my $field (@$field_list) {
+		next if $field eq 'id';
+		if ( defined $field_prefs->{$field}->{'dropdown'} ) {
+			$self->{'prefs'}->{'dropdownfields'}->{$field} = $field_prefs->{$field}->{'dropdown'};
+		} else {
+			$field_attributes->{$field}->{'dropdown'} ||= 'no';
+			$self->{'prefs'}->{'dropdownfields'}->{$field} = $field_attributes->{$field}->{'dropdown'} eq 'yes' ? 1 : 0;
+		}
+		my $extatt = $extended->{$field};
+		if ( ref $extatt eq 'ARRAY' ) {
+			foreach my $extended_attribute (@$extatt) {
+				if ( defined $field_prefs->{$field}->{'dropdown'} ) {
+					$self->{'prefs'}->{'dropdownfields'}->{"${field}..$extended_attribute"} =
+					  $field_prefs->{"${field}..$extended_attribute"}->{'dropdown'};
+				} else {
+					$self->{'prefs'}->{'dropdownfields'}->{"${field}..$extended_attribute"} = 0;
+				}
+			}
+		}
+	}
+	if ( defined $field_prefs->{'Publications'}->{'dropdown'} ) {
+		$self->{'prefs'}->{'dropdownfields'}->{'Publications'} = $field_prefs->{'Publications'}->{'dropdown'};
+	} else {
+		$self->{'prefs'}->{'dropdownfields'}->{'Publications'} =
+		  ( $self->{'system'}->{'no_publication_filter'} // '' ) eq 'yes' ? 0 : 1;
+	}
+	return;
+}
+
+sub _initiate_isolatedb_main_display_prefs {
+	my ( $self, $args ) = @_;
+	my ( $field_list, $field_prefs, $field_attributes, $extended ) =
+	  @{$args}{qw(field_list field_prefs field_attributes extended)};
+	if ( defined $field_prefs->{'aliases'}->{'maindisplay'} ) {
+		$self->{'prefs'}->{'maindisplayfields'}->{'aliases'} = $field_prefs->{'aliases'}->{'maindisplay'};
+	} else {
+		$self->{'system'}->{'maindisplay_aliases'} ||= 'no';
+		$self->{'prefs'}->{'maindisplayfields'}->{'aliases'} =
+		  $self->{'system'}->{'maindisplay_aliases'} eq 'yes' ? 1 : 0;
+	}
+	foreach my $field (@$field_list) {
+		next if $field eq 'id';
+		if ( defined $field_prefs->{$field}->{'maindisplay'} ) {
+			$self->{'prefs'}->{'maindisplayfields'}->{$field} = $field_prefs->{$field}->{'maindisplay'};
+		} else {
+			$field_attributes->{$field}->{'maindisplay'} ||= 'yes';
+			$self->{'prefs'}->{'maindisplayfields'}->{$field} =
+			  $field_attributes->{$field}->{'maindisplay'} eq 'no' ? 0 : 1;
+		}
+		my $extatt = $extended->{$field};
+		if ( ref $extatt eq 'ARRAY' ) {
+			foreach my $extended_attribute (@$extatt) {
+				if ( defined $field_prefs->{$field}->{'maindisplay'} ) {
+					$self->{'prefs'}->{'maindisplayfields'}->{"${field}..$extended_attribute"} =
+					  $field_prefs->{"${field}..$extended_attribute"}->{'maindisplay'};
+				} else {
+					$self->{'prefs'}->{'maindisplayfields'}->{"${field}..$extended_attribute"} = 0;
+				}
+			}
+		}
+	}
+	my $qry = 'SELECT id,main_display FROM composite_fields';
+	my $sql = $self->{'db'}->prepare($qry);
+	eval { $sql->execute };
+	$logger->logdie($@) if $@;
+	while ( my ( $id, $main_display ) = $sql->fetchrow_array ) {
+		if ( defined $field_prefs->{$id}->{'maindisplay'} ) {
+			$self->{'prefs'}->{'maindisplayfields'}->{$id} = $field_prefs->{$id}->{'maindisplay'};
+		} else {
+			$self->{'prefs'}->{'maindisplayfields'}->{$id} = $main_display ? 1 : 0;
+		}
+	}
+	return;
+}
+
+sub _initiate_isolatedb_locus_prefs {
+	my ( $self, $options, $guid, $dbname ) = @_;
+	my $locus_prefs =
+	  $self->{'datastore'}->run_query( 'SELECT id,isolate_display,main_display,query_field,analysis FROM loci',
+		undef, { fetch => 'all_arrayref' } );
+	my $prefstore_values = $self->{'prefstore'}->get_all_locus_prefs( $guid, $dbname );
+	my $i = 1;
+	foreach my $action (qw (isolate_display main_display query_field analysis)) {
+		if ( !$options->{$action} ) {
+			$i++;
+			next;
+		}
+		my $term = "${action}_loci";
+		foreach my $locus_pref (@$locus_prefs) {
+			my $locus = $locus_pref->[0];
+			if ( defined $prefstore_values->{$locus}->{$action} ) {
+				if ( $action eq 'isolate_display' ) {
+					$self->{'prefs'}->{$term}->{$locus} = $prefstore_values->{$locus}->{$action};
+				} else {
+					$self->{'prefs'}->{$term}->{$locus} = $prefstore_values->{$locus}->{$action} eq 'true' ? 1 : 0;
+				}
+			} else {
+				$self->{'prefs'}->{$term}->{$locus} = $locus_pref->[$i];
+			}
+		}
+		$i++;
+	}
+	return;
+}
+
+sub _initiate_isolatedb_scheme_prefs {
+	my ( $self, $guid, $dbname, $field_prefs, $scheme_field_prefs ) = @_;
+	my $scheme_ids = $self->{'datastore'}->run_query( 'SELECT id FROM schemes', undef, { fetch => 'col_arrayref' } );
+	my $scheme_values              = $self->{'prefstore'}->get_all_scheme_prefs( $guid, $dbname );
+	my $scheme_field_default_prefs = $self->{'datastore'}->get_all_scheme_field_info;
+	my $scheme_info                = $self->{'datastore'}->get_all_scheme_info;
+	my $scheme_fields              = $self->{'datastore'}->get_all_scheme_fields;
+	foreach my $scheme_id (@$scheme_ids) {
+		foreach my $action (qw(isolate_display main_display query_field query_status analysis)) {
+			if ( defined $scheme_values->{$scheme_id}->{$action} ) {
+				$self->{'prefs'}->{"$action\_schemes"}->{$scheme_id} = $scheme_values->{$scheme_id}->{$action} ? 1 : 0;
+			} else {
+				$self->{'prefs'}->{"$action\_schemes"}->{$scheme_id} = $scheme_info->{$scheme_id}->{$action};
+			}
+		}
+		if ( ref $scheme_fields->{$scheme_id} eq 'ARRAY' ) {
+			foreach my $field ( @{ $scheme_fields->{$scheme_id} } ) {
+				foreach my $action (qw(isolate_display main_display query_field)) {
+					if ( defined $scheme_field_prefs->{$scheme_id}->{$field}->{$action} ) {
+						$self->{'prefs'}->{"${action}_scheme_fields"}->{$scheme_id}->{$field} =
+						  $scheme_field_prefs->{$scheme_id}->{$field}->{$action} ? 1 : 0;
+					} else {
+						$self->{'prefs'}->{"${action}_scheme_fields"}->{$scheme_id}->{$field} =
+						  $scheme_field_default_prefs->{$scheme_id}->{$field}->{$action};
+					}
+				}
+			}
+		}
+		my $field = "scheme_$scheme_id\_profile_status";
+		if ( defined $field_prefs->{$field}->{'dropdown'} ) {
+			$self->{'prefs'}->{'dropdownfields'}->{$field} = $field_prefs->{$field}->{'dropdown'};
+		} else {
+			$self->{'prefs'}->{'dropdownfields'}->{$field} = $self->{'prefs'}->{'query_status_schemes'}->{$scheme_id};
+		}
+	}
+	return;
+}
+
+sub _setup_prefstore {
+	my ($self) = @_;
+	my %att = (
+		dbase_name => $self->{'config'}->{'prefs_db'},
+		host       => $self->{'system'}->{'host'},
+		port       => $self->{'system'}->{'port'},
+		user       => $self->{'system'}->{'user'},
+		password   => $self->{'system'}->{'password'},
+	);
+	my $pref_db;
+	try {
+		$pref_db = $self->{'dataConnector'}->get_connection( \%att );
+	}
+	catch {
+		$self->throw_error( { status => 500, message => 'Cannot connect to preferences database!' } );
+	};
+	$self->{'prefstore'} = BIGSdb2::Preferences->new( db => $pref_db );
+	return;
 }
 1;

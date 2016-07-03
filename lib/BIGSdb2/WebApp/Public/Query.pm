@@ -33,15 +33,15 @@ get '/:db/query' => sub {
 	return;
 };
 ajax '/:db/provenance_fields/:element' => sub {
-	$logger->error( params->{'element'} );
 	return template 'public/query/provenance.tt',
 	  { i => params->{'element'}, operators => [OPERATORS], provenance_items => _get_provenance_items() };
 };
 
 sub _isolate_query {
-	my $self   = setting('self');
-	my $desc   = $self->get_db_description;
-	my $title  = $self->{'curate'} ? 'Isolate query/update' : "Search or browse $desc database";
+	my $self = setting('self');
+	my $desc = $self->get_db_description;
+	$self->initiate_prefs( { general => 1, main_display => 1, isolate_display => 0, analysis => 0, query_field => 1 } );
+	my $title = $self->{'curate'} ? 'Isolate query/update' : "Search or browse $desc database";
 	my $params = {
 		title                       => $title,
 		javascript                  => $self->get_javascript_libs( [qw(jQuery noCache jQuery.multiselect)] ),
