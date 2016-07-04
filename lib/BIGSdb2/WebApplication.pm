@@ -355,8 +355,7 @@ sub _is_authorized {
 		return 1;
 	}
 	if ( request->is_ajax ) {
-		$logger->fatal('Session timed out (ajax call)');
-		halt();
+		halt('Session timed out - reload page to log in.');
 	}
 
 	#Strip off database part of route to prevent someone logging

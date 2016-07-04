@@ -128,7 +128,7 @@ sub _get_modify_panel_items {
 		value_elements => 'prov_value',
 		id             => 'show_provenance',
 		text           => 'Provenance fields',
-		show           => 1
+		show           => _display_fieldset('provenance')
 	  };
 	return $items;
 }
