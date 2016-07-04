@@ -1,0 +1,60 @@
+<div class="panel">
+<a class="trigger" id="close_trigger" href="#"><span class="fa fa-lg fa-close"></span></a>
+<h2>Modify form parameters</h2>
+<p>Click to add or remove additional query terms:</p><ul>
+[% FOREACH item IN modify_panel -%]
+[% IF item.show -%][% icon="<span class=\"fa fa-lg fa-minus-circle\" style=\"color:red\"></span>" -%]
+[% ELSE -%][% icon="<span class=\"fa fa-lg fa-plus-circle\" style=\"color:green\"></span>" -%]
+[% END -%]
+<li><a href="" class="button" id="[% item.id %]">[% icon %]</a>[% item.text %]</li>
+[% END -%]
+</ul>
+<a id="save_options" class="button" href="[% uri_base %]/[% db %]/save_options" style="display:none">
+<span class="fa fa-lg fa-save" style="color:green"></span></a> 
+<span id="saving"></span><br />
+</div>
+<a class="trigger" id="panel_trigger" href="" style="display:none">Modify<br />form<br />options</a>
+</div>
+
+<script type="text/Javascript">
+	$(".trigger").click(function(){		
+		$(".panel").toggle("slide",{direction:"right"},"fast");
+		$("#panel_trigger").show().animate({backgroundColor: "#448"},100).animate({backgroundColor: "#99d"},100);		
+		return false;
+	});
+	[% FOREACH item IN modify_panel -%]
+	$("#[% item.id %]").click(function() {
+       if($(this).html() == '<span class="fa fa-lg fa-minus-circle" style="color:red"></span>'){
+          $('[id^="[% item.value_elements %]"]').val('');
+       }
+       $("#[% item.fieldset %]").toggle(100);
+       $(this).html($(this).html() == '<span class="fa fa-lg fa-plus-circle" style="color:green"></span>' ? '<span class="fa fa-lg fa-minus-circle" style="color:red"></span>' : '<span class="fa fa-lg fa-plus-circle" style="color:green"></span>');
+       $("a#save_options").fadeIn();
+       return false;
+    });	
+	[% END -%]
+	$("#panel_trigger").show().animate({backgroundColor: "#99d"},500);
+	$("a#save_options").click(function(event){		
+		var save_data={};
+		[% FOREACH item IN modify_panel -%]
+		var visible = $("#[% item.fieldset %]").is(":visible");
+		save_data["[% item.fieldset %]"] = visible;
+		[% END -%]
+	
+		event.preventDefault();
+	  	$(this).attr('href', function(){  	
+	  		$("a#save_options").html('<span class="fa fa-lg fa-save" style="color:blue"></span>').animate({backgroundColor: "#99d"},100).animate({backgroundColor: "#f0f0f0"},100);
+	  		$("span#saving").text('Saving...');
+	  		$.ajax({
+	  			url : this.href,
+	  			method: 'POST',
+	  			data: save_data,
+	  			success: function () {	  				
+	  				$("a#save_options").hide();
+	  				$("span#saving").text('');
+	  				$("a#save_options").html('<span class="fa fa-lg fa-save" style="color:green"></span>');
+	  			}
+	  		});
+	   	});
+	});
+</script>

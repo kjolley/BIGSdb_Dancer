@@ -24,7 +24,7 @@ use Log::Log4perl qw(get_logger);
 my $logger = get_logger('BIGSdb.Page');
 use Dancer2 appname => 'BIGSdb2::WebApplication';
 use Dancer2::Plugin::Ajax;
-use BIGSdb2::Constants qw(OPERATORS);
+use BIGSdb2::Constants qw(OPERATORS MAX_ROWS);
 get '/:db/query' => sub {
 	my $self = setting('self');
 	if ( $self->{'system'}->{'dbtype'} eq 'isolates' ) {
@@ -46,15 +46,40 @@ sub _isolate_query {
 		title     => $title,
 		help_link => "$self->{'config'}->{'doclink'}/curator_guide.html#"
 		  . 'updating-and-deleting-single-isolate-records',
-		tooltips                    => 1,
-		javascript                  => $self->get_javascript_libs( [qw(jQuery noCache jQuery.multiselect)] ),
-		submit                      => $self->get_action_fieldset,
-		provenance_fieldset_display => 'inline',
-		provenance_elements         => 1,
-		provenance_items            => _get_provenance_items()
+		tooltips     => 1,
+		javascript   => $self->get_javascript_libs( [qw(jQuery noCache jQuery.multiselect)] ),
+		submit       => $self->get_action_fieldset,
+		modify_panel => _get_modify_panel_items()
 	};
+	_get_form_start_state();
 	$self->add_route_params($params);
 	return template 'public/query.tt', $self->{'route_params'};
+}
+
+sub _get_form_start_state {
+	my $self      = setting('self');
+	my @fieldsets = qw(provenance);
+	my %methods   = ( provenance => \&_get_provenance_items );
+	foreach my $fieldset (@fieldsets) {
+		my $highest_field = _highest_entered_fields($fieldset);
+		$self->{'route_params'}->{"${fieldset}_display"}  = _display_fieldset($fieldset) || $highest_field;
+		$self->{'route_params'}->{"${fieldset}_items"}    = $methods{$fieldset}->();
+		$self->{'route_params'}->{"${fieldset}_elements"} = $highest_field // 1;
+	}
+	return;
+}
+
+sub _display_fieldset {
+	my ($fieldset) = @_;
+	my $self = setting('self');
+	my %default_display = ( provenance => 1 );
+	my $guid = $self->get_guid || 1;
+	my $display_pref =
+	  $self->{'prefstore'}->get_general_pref( $guid, $self->{'system'}->{'db'}, "${fieldset}_fieldset" );
+	if ( defined $display_pref ) {
+		return $display_pref eq 'off' ? 0 : 1;
+	}
+	return $default_display{$fieldset};
 }
 
 sub _get_provenance_items {
@@ -72,6 +97,39 @@ sub _get_provenance_items {
 			}
 		}
 	}
+	return $items;
+}
+
+sub _highest_entered_fields {
+	my ($type) = @_;
+	my %param_name = (
+		provenance    => 'prov_value',
+		loci          => 'designation_value',
+		allele_count  => 'allele_count_value',
+		allele_status => 'allele_status_value',
+		tag_count     => 'tag_count_value',
+		tags          => 'tag_value'
+	);
+	my $highest;
+	for my $row ( 1 .. MAX_ROWS ) {
+		my $param = "$param_name{$type}$row";
+		$highest = $row
+		  if defined params->{$param} && params->{$param} ne '';
+	}
+	return $highest;
+}
+
+sub _get_modify_panel_items {
+	my $self  = setting('self');
+	my $items = [];
+	push @$items,
+	  {
+		fieldset       => 'provenance_fieldset',
+		value_elements => 'prov_value',
+		id             => 'show_provenance',
+		text           => 'Provenance fields',
+		show           => 1
+	  };
 	return $items;
 }
 1;

@@ -4,17 +4,19 @@ that you enable Javascript in your browser.</p></div></noscript>
 <div class="box" id="queryform"><div class="scrollable">
 [% PROCESS provenance -%]
 [% submit %]
+[% INCLUDE 'public/query/modify_form.tt' %]
 </div></div>
 
 
 
 [% BLOCK provenance -%]
+[% display=provenance_display ? 'inline' : 'none' -%]
 [% IF provenance_elements > 1 -%]
 [% multi_prov_fields = 'inline' -%]
 [% ELSE -%]
 [% multi_prov_fields = 'none' -%]
 [% END -%]
-<fieldset id="provenance_fieldset" style="float:left;display:[% provenance_fieldset_display %]">
+<fieldset id="provenance_fieldset" style="float:left;display:[% display %]">
 <legend>Isolate provenance/phenotype fields</legend>
 <span id="prov_field_heading" style="display:[% multi_prov_fields %]">
 <label for="prov_andor">Combine with: </label>
@@ -24,7 +26,7 @@ that you enable Javascript in your browser.</p></div></noscript>
 </select></span>
 <ul id="provenance">
 [% i=0 -%]
-[% WHILE i < provenance_elements %][% i=i+1 %][% INCLUDE 'public/query/provenance.tt' %][% END %]	
+[% WHILE i < provenance_elements %][% i=i+1 %][% INCLUDE 'public/query/provenance.tt' %][% END -%]	
 </ul></fieldset>
 [% END -%]
 

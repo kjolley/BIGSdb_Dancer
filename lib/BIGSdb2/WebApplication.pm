@@ -47,6 +47,17 @@ ajax '/:db/toggle_tooltips' => sub {
 	$self->_toggle_option('tooltips');
 	return;
 };
+ajax '/:db/save_options' => sub {
+	my $self = setting('self');
+	my $guid = $self->get_guid;
+	return if !$guid;
+	foreach my $key ( keys params ) {
+		next if $key !~ /fieldset$/x;
+		$self->{'prefstore'}
+		  ->set_general( $guid, $self->{'system'}->{'db'}, $key, params->{$key} eq 'true' ? 'on' : 'off' );
+	}
+	return;
+};
 
 #The default root (404 not found) must be the last defined.
 any qr/.*/x => sub {
