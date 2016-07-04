@@ -23,12 +23,14 @@ use 5.010;
 use parent qw(BIGSdb2::Application);
 use Dancer2;
 use Dancer2::Core::Error;
+use Dancer2::Plugin::Ajax;
 use Config::Tiny;
 use Try::Tiny;
 use List::MoreUtils qw(uniq none);
 use Digest::MD5;
 use Log::Log4perl qw(get_logger);
 my $logger = get_logger('BIGSdb.Application_Initiate');
+use BIGSdb2::Constants qw(MAX_ROWS OPERATORS);
 use BIGSdb2::WebApp::About;
 use BIGSdb2::WebApp::ChangePassword;
 use BIGSdb2::WebApp::Login;
@@ -39,7 +41,15 @@ use BIGSdb2::Constants qw(:interface :authentication);
 hook before                 => sub { _before() };
 hook after                  => sub { _after() };
 hook before_template_render => sub { _before_template() };
-any qr/.*/x                 => sub {
+ajax '/:db/toggle_tooltips' => sub {
+	my $self = setting('self');
+	$self->initiate_prefs( { general => 1 } );
+	$self->_toggle_option('tooltips');
+	return;
+};
+
+#The default root (404 not found) must be the last defined.
+any qr/.*/x => sub {
 	my $self = setting('self');
 	$self->throw_error(
 		{
@@ -51,6 +61,16 @@ any qr/.*/x                 => sub {
 		}
 	);
 };
+
+sub _toggle_option {
+	my ( $self, $field ) = @_;
+	my $prefs = $self->{'prefs'};
+	my $value = $prefs->{$field} ? 'off' : 'on';
+	my $guid  = $self->get_guid;
+	return if !$guid;
+	$self->{'prefstore'}->set_general( $guid, $self->{'system'}->{'db'}, $field, $value );
+	return;
+}
 
 sub initiate {
 	my ($self) = @_;
@@ -155,7 +175,6 @@ sub _before {
 	$self->_setup_prefstore;
 
 	#	$self->_initiate_view;
-	return if request->is_ajax;
 	my $authenticated_db = ( $self->{'system'}->{'read_access'} // '' ) ne 'public';
 	my $login_route      = "/$self->{'instance'}/login";
 	my $logout_route     = "/$self->{'instance'}/logout";
@@ -167,6 +186,17 @@ sub _before {
 			redirect( uri_for("/$self->{'instance'}/changePassword") );
 		}
 	}
+	$self->{'route_params'} = { db => $self->{'instance'}, max_rows => MAX_ROWS, operators => [OPERATORS] };
+	return;
+}
+
+#Merge route-specific params.
+#Include any params that depend on access to preference store as this is only
+#accessed in route.
+sub add_route_params {
+	my ( $self, $params ) = @_;
+	$self->{'route_params'}->{$_} = $params->{$_} foreach keys %$params;
+	$self->{'route_params'}->{'tooltip_display'} = 'inline' if $self->{'prefs'}->{'tooltips'};
 	return;
 }
 
@@ -312,6 +342,10 @@ sub _is_authorized {
 			);
 		}
 		return 1;
+	}
+	if ( request->is_ajax ) {
+		$logger->fatal('Session timed out (ajax call)');
+		halt();
 	}
 
 	#Strip off database part of route to prevent someone logging
@@ -558,8 +592,6 @@ sub initiate_prefs {
 	}
 	catch {
 		undef $self->{'prefstore'};
-
-		#		$self->{'fatal'} = 'prefstoreConfig';
 	};
 	return if !$options->{'general'} && !$options->{'query_field'};
 	return if !$self->{'prefstore'};
@@ -835,7 +867,7 @@ sub _setup_prefstore {
 	catch {
 		$self->throw_error( { status => 500, message => 'Cannot connect to preferences database!' } );
 	};
-	$self->{'prefstore'} = BIGSdb2::Preferences->new( db => $pref_db );
+	$self->{'prefstore'} = BIGSdb2::WebApp::Preferences->new( db => $pref_db );
 	return;
 }
 1;

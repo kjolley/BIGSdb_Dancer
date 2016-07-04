@@ -24,7 +24,7 @@ use Log::Log4perl qw(get_logger);
 my $logger = get_logger('BIGSdb.Page');
 use Dancer2 appname => 'BIGSdb2::WebApplication';
 use Dancer2::Plugin::Ajax;
-use BIGSdb2::Constants qw(MAX_ROWS OPERATORS);
+use BIGSdb2::Constants qw(OPERATORS);
 get '/:db/query' => sub {
 	my $self = setting('self');
 	if ( $self->{'system'}->{'dbtype'} eq 'isolates' ) {
@@ -43,17 +43,18 @@ sub _isolate_query {
 	$self->initiate_prefs( { general => 1, main_display => 1, isolate_display => 0, analysis => 0, query_field => 1 } );
 	my $title = $self->{'curate'} ? 'Isolate query/update' : "Search or browse $desc database";
 	my $params = {
-		title                       => $title,
+		title     => $title,
+		help_link => "$self->{'config'}->{'doclink'}/curator_guide.html#"
+		  . 'updating-and-deleting-single-isolate-records',
+		tooltips                    => 1,
 		javascript                  => $self->get_javascript_libs( [qw(jQuery noCache jQuery.multiselect)] ),
 		submit                      => $self->get_action_fieldset,
-		db                          => $self->{'instance'},
-		max_rows                    => MAX_ROWS,
-		operators                   => [OPERATORS],
 		provenance_fieldset_display => 'inline',
 		provenance_elements         => 1,
 		provenance_items            => _get_provenance_items()
 	};
-	return template 'public/query.tt', $params;
+	$self->add_route_params($params);
+	return template 'public/query.tt', $self->{'route_params'};
 }
 
 sub _get_provenance_items {

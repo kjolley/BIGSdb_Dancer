@@ -1,3 +1,6 @@
+[% DEFAULT
+	tooltip_display='none'
+-%]
 <!DOCTYPE html>
 <html>
 <head>
@@ -6,6 +9,7 @@
 <link rel="stylesheet" type="text/css" href="[% uri_base %]/css/bigsdb.css" media="Screen" />
 <link rel="stylesheet" type="text/css" href="[% uri_base %]/css/font-awesome.css" media="Screen" />
 <link rel="stylesheet" type="text/css" href="[% uri_base %]/css/jquery-ui.css" media="Screen" />
+<style type="text/css">.tooltip{display:[% tooltip_display %]}</style>
 [% javascript %]
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 </head>
@@ -14,7 +18,20 @@
 [% INCLUDE $settings.site_header %]
 [% END -%]
 <div class="content" style="min-height:400px">
-
+[% IF help_link OR tooltips -%]
+<div id="fieldvalueshelp">
+[% IF help_link -%]
+<span class="context_help"><a href="[% help_link %]" target="_blank" title="Open help in new window">
+Help <span class="fa fa-external-link"></span></a></span>
+[% END -%]
+[% IF tooltips -%]
+<span id="toggle" style="display:none">Toggle: </span>
+<a id="toggle_tooltips" href="[% uri_base %]/[% db %]/toggle_tooltips" 
+title="Toggle tooltips" style="margin-right:1em">
+<span class="fa fa-info-circle fa-lg"></span></a>
+[% END -%]
+</div>
+[% END -%]
 <div id="logindetails">
 [% IF session.user %]
 <i>Logged in: <b>[% session.full_name %] ([% session.user %]).</b></i>
