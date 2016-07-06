@@ -3,11 +3,10 @@
 that you enable Javascript in your browser.</p></div></noscript>
 <div class="box" id="queryform"><div class="scrollable">
 [% PROCESS provenance -%]
+[% PROCESS display -%]
 [% submit %]
 [% INCLUDE 'public/query/modify_form.tt' %]
 </div></div>
-
-
 
 [% BLOCK provenance -%]
 [% display=provenance_display ? 'inline' : 'none' -%]
@@ -52,9 +51,8 @@ that you enable Javascript in your browser.</p></div></noscript>
 [% END -%]
 
 [% BLOCK display -%]
-[% END -%]
-
-[% BLOCK modify_search -%]
+<fieldset id="display_fieldset" style="float:left"><legend>Display/sort options</legend>
+</fieldset>
 [% END -%]
 
 [% BLOCK tooltip_add_text -%]
